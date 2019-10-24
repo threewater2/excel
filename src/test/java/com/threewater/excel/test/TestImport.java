@@ -12,12 +12,12 @@ import org.junit.jupiter.api.Test;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Calendar;
 import java.util.List;
 
 import static org.junit.Assert.*;
 
-//@SpringBootTest
-public class TestImport {
+class TestImport {
 
     Workbook initWorkBook() throws IOException {
         String path="C:/Users/water/Desktop/excelTest.xlsx";
@@ -34,7 +34,7 @@ public class TestImport {
             assertNotNull(userList);
             for (User user:userList){
                 assertEquals(user.getName(),"water");
-                assertEquals(user.getEmail(),"water");
+                assertEquals(user.getEmail(),"waterthreewaterzxm@gmail.com");
             }
         } catch (ExcelException e) {
             e.printStackTrace();
@@ -63,9 +63,47 @@ public class TestImport {
             }
         }
         assertTrue(exist);
-        assertEquals(3,userList.size());
-        assertEquals("water1",userList.get(0).getName());
-        assertEquals("water2",userList.get(1).getName());
-        assertEquals("water3",userList.get(2).getName());
+        assertEquals(4,userList.size());
+        assertEquals("water",userList.get(0).getName());
+        assertEquals("water",userList.get(1).getName());
+        assertEquals("water",userList.get(2).getName());
     }
+
+    @Test
+    void email() throws Exception{
+        Workbook workbook=initWorkBook();
+        DefaultExcelUtil excelUtil=new DefaultExcelUtil();
+        List<User> userList = excelUtil.excelParse(User.class, workbook);
+        assertEquals(4,userList.size());
+        List<ExcelException> excelExceptions = excelUtil.showResult();
+        assertEquals(0,excelExceptions.size());
+//        assertEquals(ColumnIllegalException.class,excelExceptions.get(0).getClass());
+    }
+
+    @Test
+    void date() throws Exception{
+        Workbook workbook=initWorkBook();
+        DefaultExcelUtil excelUtil=new DefaultExcelUtil();
+        List<User> userList = excelUtil.excelParse(User.class, workbook);
+        assertEquals(4,userList.size());
+        Calendar birth=Calendar.getInstance();
+        for(User user:userList){
+            birth.setTime(user.getBirth());
+            assertEquals(2019,birth.get(Calendar.YEAR));
+            assertEquals(Calendar.SEPTEMBER,birth.get(Calendar.MONTH));
+            assertEquals(12,birth.get(Calendar.DATE));
+        }
+    }
+
+    @Test
+    void customCellReader() throws Exception{
+        Workbook workbook=initWorkBook();
+        DefaultExcelUtil excelUtil=new DefaultExcelUtil();
+        List<User> userList = excelUtil.excelParse(User.class, workbook);
+        for(User user:userList){
+            assertEquals("123我自定义",user.getContent());
+        }
+    }
+
+
 }

@@ -35,7 +35,7 @@ class ExcelApplicationTests {
     void test2(){
         ExcelUtil excelUtil=new DefaultExcelUtil();
         try {
-            InputStream excelTemplate = excelUtil.getExcelTemplate(User.class);
+            Workbook excelTemplate = excelUtil.getExcelTemplate(User.class);
         } catch (ExcelException e) {
             e.printStackTrace();
         }

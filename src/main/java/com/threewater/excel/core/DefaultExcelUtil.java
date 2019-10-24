@@ -1,21 +1,22 @@
 package com.threewater.excel.core;
 
-import com.threewater.excel.annotaion.input.Column;
-import com.threewater.excel.annotaion.input.Validate;
+import com.threewater.excel.annotaion.input.*;
+import com.threewater.excel.annotaion.output.ColumnTemplate;
+import com.threewater.excel.annotaion.output.ExcelTemplate;
 import com.threewater.excel.exception.ColumnIllegalException;
+import com.threewater.excel.exception.ExcelConfigException;
 import com.threewater.excel.exception.ExcelException;
 import com.threewater.excel.exception.IllegalValidatorException;
 import com.threewater.excel.validator.Validator;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.ss.usermodel.*;
 
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Date;
 import java.util.List;
+
 
 public class DefaultExcelUtil implements ExcelUtil {
 
@@ -24,8 +25,10 @@ public class DefaultExcelUtil implements ExcelUtil {
     private int successNum = 0;
 
     @Override
-    public <T extends ExcelReadable> List<T> excelParse(Class<T> entity, Workbook workbook) {
+    public <T> List<T> excelParse(Class<T> entity, Workbook workbook) {
         List<T> resList = new ArrayList<>();
+        if(entity.getDeclaredAnnotation(ExcelReadable.class)==null)
+            throw new ExcelConfigException(entity.getName()+"没有标注"+ExcelReadable.class.getName()+"注解");
         Sheet sheet = workbook.getSheetAt(0);
         int length = sheet.getLastRowNum();
         for (int rowIndex = 0; rowIndex <= length; rowIndex++) {
@@ -41,16 +44,29 @@ public class DefaultExcelUtil implements ExcelUtil {
     }
 
     @Override
-    public <T extends ExcelWriteable> InputStream toExcel(List<T> entityList) {
+    public <T> InputStream toExcel(List<T> entityList) {
         return null;
     }
 
     @Override
-    public <T> InputStream getExcelTemplate(T entity) {
-        return null;
+    public Workbook getExcelTemplate(Class entity) {
+        ExcelTemplate excelTemplate = (ExcelTemplate) entity.getDeclaredAnnotation(ExcelTemplate.class);
+        if(excelTemplate==null) return null;
+        Workbook workbook=new HSSFWorkbook();
+        Sheet sheet = workbook.createSheet();
+        Row row = sheet.createRow(0);
+        Field[] fields = entity.getDeclaredFields();
+        for(Field field:fields){
+            ColumnTemplate columnTemplate = field.getAnnotation(ColumnTemplate.class);
+            if(columnTemplate==null) continue;
+            String value = columnTemplate.value();
+            Cell cell = row.createCell(columnTemplate.columnIndex());
+            cell.setCellValue(value);
+        }
+        return workbook;
     }
 
-    private <T extends ExcelReadable> T readRow(Class<T> entity, Row row) {
+    private <T> T readRow(Class<T> entity, Row row) {
         Field[] fields = entity.getDeclaredFields();
         Object instance = null;
         try {
@@ -63,11 +79,17 @@ public class DefaultExcelUtil implements ExcelUtil {
             Integer columnNum = resolveField(field);
             if (columnNum == null) continue;
             Cell cell = row.getCell(columnNum);
-            String cellStr = resolveCell(cell);
-            if (!isValid(field, cellStr)) {
+            Object cellObj = null;
+            try {
+                cellObj = resolveCell(field,cell);
+            } catch (ColumnIllegalException e) {
+               excelExceptions.add(e);
+               return null;
+            }
+            if (!isValid(field, cellObj)) {
                 return null;
             }
-            setField(field, instance, cellStr);
+            setField(field, instance, cellObj);
         }
         return (T) instance;
     }
@@ -81,14 +103,20 @@ public class DefaultExcelUtil implements ExcelUtil {
         return columnIndex.value();
     }
 
-    private String resolveCell(Cell cell) {
-        if (cell == null) return null;
-        return cell.getStringCellValue();
+    private Object resolveCell(Field field,Cell cell) throws ColumnIllegalException{
+        if(cell==null) return null;
+        CellRead cellRead = field.getAnnotation(CellRead.class);
+        try {
+            CellReader cellReader=cellRead==null?new DefaultCellReader():cellRead.value().newInstance();
+            return cellReader.readCell(field,cell);
+        } catch (InstantiationException | IllegalAccessException e) {
+            String expStr=cellRead.value().getName()+"无法实例化";
+            throw new ColumnIllegalException(expStr);
+        }
     }
 
     private void setField(Field field, Object instance, Object value) {
         try {
-
             field.set(instance, value);
         } catch (IllegalAccessException e) {
             e.printStackTrace();
@@ -134,14 +162,18 @@ public class DefaultExcelUtil implements ExcelUtil {
     }
 
     public static void main(String[] args) {
-        Object u=new HashMap<>();
-        try{
-            Integer in=(Integer)u;
-        } catch (ClassCastException e){
-            e.printStackTrace();
-            String message = e.getMessage();
-            System.out.println(message);
+        Field[] declaredFields = User.class.getDeclaredFields();
+        for(Field field:declaredFields){
+            Class<?> type = field.getType();
+            if(type==Date.class){
+                System.out.println("gg");
+            }
         }
+    }
+
+    private static class User{
+        private String username;
+        private Date date;
     }
 
 }
